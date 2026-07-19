@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.firebase/
+.firebase-data/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+apps/web/.env
+apps/web/.env.local
+*.local
+serviceAccount*.json
+*-firebase-adminsdk-*.json
+.cursor/
+uploads/

@@ -1,0 +1,28 @@
+{
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "ieec-ya-connect",
+    "storage_bucket": "ieec-ya-connect.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:replace_me",
+        "android_client_info": {
+          "package_name": "org.ieec.yaconnect"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "REPLACE_WITH_ANDROID_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

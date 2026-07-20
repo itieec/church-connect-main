@@ -34,6 +34,67 @@
         { "fieldPath": "organizationId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "followUpAssignments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "assignedPersonId", "order": "ASCENDING" },
+        { "fieldPath": "assignmentStatus", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "followUpAssignments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "journeyId", "order": "ASCENDING" },
+        { "fieldPath": "assignmentStatus", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "newcomerJourneys",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "journeyStatus", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "followUpReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "assignmentId", "order": "ASCENDING" },
+        { "fieldPath": "reportingWeekStart", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "newcomerAttendance",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "programDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "newcomerBioEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "personId", "order": "ASCENDING" },
+        { "fieldPath": "recordStatus", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "assigneePersonId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

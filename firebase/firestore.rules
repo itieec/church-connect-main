@@ -34,14 +34,10 @@ service cloud.firestore {
       return data.organizationId == orgId();
     }
 
-    // Phase A: Super Admin / Head Leader bootstrap via platform permission keys
-    // stored on roleAssignments. Full live RBAC evaluation in rules lands with
-    // Cloud Functions / claims enrichment; clients still resolve permissions.
     function hasPlatformAdmin() {
       return accountActive()
-        && (
-          account().keys().hasAny(['isSuperAdmin']) && account().isSuperAdmin == true
-        );
+        && account().keys().hasAny(['isSuperAdmin'])
+        && account().isSuperAdmin == true;
     }
 
     function canReadOrg(data) {
@@ -52,14 +48,31 @@ service cloud.firestore {
       return hasPlatformAdmin() && sameOrg(data);
     }
 
+    // Phase B interim: signed-in org members may write Follow-Up ops they own.
+    // Fine-grained permission keys will move to custom claims / Functions later.
+    function isOrgMember() {
+      return accountActive();
+    }
+
+    function isAssignee(data) {
+      return data.keys().hasAny(['assignedPersonId'])
+        && data.assignedPersonId == personId();
+    }
+
+    function isReporter(data) {
+      return data.keys().hasAny(['submittedByPersonId'])
+        && data.submittedByPersonId == personId();
+    }
+
     match /organizations/{organizationId} {
       allow read: if accountActive() && organizationId == account().organizationId;
       allow write: if hasPlatformAdmin();
     }
 
-    match /people/{personId} {
+    match /people/{pid} {
       allow read: if canReadOrg(resource.data);
-      allow create, update: if canWriteOrgAdmin(request.resource.data);
+      allow create, update: if canWriteOrgAdmin(request.resource.data)
+        || (isOrgMember() && sameOrg(request.resource.data));
       allow delete: if false;
     }
 
@@ -127,7 +140,76 @@ service cloud.firestore {
       allow write: if canWriteOrgAdmin(request.resource.data);
     }
 
-    // Public registration intake is Phase B (Follow-Up). Locked closed for Phase A.
+    match /calendarEvents/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow create, update: if isOrgMember() && sameOrg(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /formDefinitions/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow write: if canWriteOrgAdmin(request.resource.data);
+    }
+
+    match /newcomerJourneys/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow create, update: if isOrgMember() && sameOrg(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /followUpAssignments/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow create, update: if isOrgMember() && sameOrg(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /followUpReports/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow create: if isOrgMember()
+        && sameOrg(request.resource.data)
+        && request.resource.data.submittedByPersonId == personId();
+      allow update: if isOrgMember()
+        && sameOrg(resource.data)
+        && (isReporter(resource.data) || hasPlatformAdmin());
+      allow delete: if false;
+    }
+
+    match /newcomerAttendance/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow create, update: if isOrgMember()
+        && sameOrg(request.resource.data)
+        && request.resource.data.recordedByPersonId == personId();
+      allow delete: if false;
+    }
+
+    match /newcomerBioEntries/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow create: if isOrgMember()
+        && sameOrg(request.resource.data)
+        && request.resource.data.addedByPersonId == personId();
+      allow update: if isOrgMember()
+        && sameOrg(resource.data)
+        && (resource.data.addedByPersonId == personId() || hasPlatformAdmin());
+      allow delete: if false;
+    }
+
+    match /tasks/{id} {
+      allow read: if canReadOrg(resource.data)
+        && (resource.data.assigneePersonId == personId() || hasPlatformAdmin());
+      allow create, update: if isOrgMember() && sameOrg(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /notifications/{id} {
+      allow read: if canReadOrg(resource.data)
+        && resource.data.recipientPersonId == personId();
+      allow create: if isOrgMember() && sameOrg(request.resource.data);
+      allow update: if accountActive()
+        && resource.data.recipientPersonId == personId();
+      allow delete: if false;
+    }
+
+    // Public registration intake remains locked until a dedicated public path.
     match /{document=**} {
       allow read, write: if false;
     }

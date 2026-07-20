@@ -98,9 +98,19 @@ Creates org `ieec_ya`, Young Adult ministry, Follow-Up team, role templates (Sup
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| A | Auth, People, RBAC session, admin view, rules, hosting | **In progress in this branch** |
-| B | Follow-Up module | Next |
-| C | Expo mobile parity | After B |
+| A | Auth, People, RBAC session, admin view, rules, hosting | Done (foundation) |
+| B | Follow-Up module (web minister flows) | In progress on this branch |
+| C | Expo mobile + React Native Firebase parity | In progress on this branch |
+
+### Mobile
+
+See [`apps/mobile/README.md`](apps/mobile/README.md). Uses **Expo Router** + **React Native Firebase**. Requires a development/EAS build (not Expo Go).
+
+```bash
+npm run build -w @ieec/shared
+npm run dev:mobile
+# then: npx expo prebuild && npm run android|ios  (or EAS)
+```
 
 ## Security notes
 

@@ -126,6 +126,12 @@ export function NewcomerProfilePage() {
           >
             Saturday attendance
           </Link>
+          <Link
+            className="button ghost"
+            to={`/app/follow-up/newcomers/${assignmentId}/membership`}
+          >
+            Membership recommendation
+          </Link>
         </p>
       </section>
 

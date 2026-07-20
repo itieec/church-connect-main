@@ -1,41 +1,30 @@
 # Implementation status
 
-**Branch:** Phase B Follow-Up + Phase C Expo mobile (parallel)  
 **Date:** 2026-07-20
 
-## Decisions locked
+## Merged to main
 
-- Mobile Firebase SDK: **React Native Firebase**
-- Delivery: Phase B (Follow-Up) and Phase C (mobile) **in parallel**
-- Navigation: Expo Router
+- PR #1 Phase A foundation — **merged**
+- PR #2 Phase B/C Follow-Up + Expo mobile — **merged**
 
-## Delivered
+## Firebase connect / deploy / seed
 
-### Shared / backend
-- Follow-Up types + reporting helpers in `@ieec/shared`
-- Firestore rules/indexes for Follow-Up collections
-- Seed creates demo newcomer + active assignment for bootstrap user
+**Blocked in this cloud agent:** no `firebase login`, no `FIREBASE_TOKEN`, no service account, no web/mobile API keys.
 
-### Web (Phase B minister slice)
-- `/app/follow-up` assigned list
-- Profile / weekly report / Saturday attendance (separate records)
+Run locally (or re-run agent after pasting secrets): see [`docs/FIREBASE_CONNECT.md`](FIREBASE_CONNECT.md) and `npm run firebase:connect`.
 
-### Mobile (Phase C)
-- `apps/mobile` Expo app with RN Firebase Auth + Firestore
-- Sign-in + permission session
-- Assigned newcomers, report, attendance, profile, bio
-- Local notification helpers (first-contact 48h, weekly reminder)
-- EAS profiles + README
+## Mobile smoke on device
 
-## Still required from human
+Blocked without real `google-services.json` / `GoogleService-Info.plist` and EAS/Apple/Google signing. Helper: `scripts/mobile-smoke-check.sh`.
 
-1. Firebase login/token + confirm project `ieec-ya-connect`
-2. Real `google-services.json` / `GoogleService-Info.plist`
-3. `npm run seed` with service account
-4. EAS project id + Apple/Google signing for store builds
+## Phase B remainder (this branch)
 
-## Not in this slice
+- Public registration `/register` (consent-only public create)
+- Leader desk: staff intake, duplicate review (accept/link/discard), unassigned assign/reassign
+- Membership recommendation (minister) + approvals (leader) → Member transition
 
-- Public registration UI
-- Membership approval workflow UI (web-primary later)
-- Full FCM server push pipeline (local reminders wired)
+## Still later
+
+- Multi-step configurable approval templates beyond Minister → Leader MVP
+- Server FCM push pipeline
+- Cloud Function for anonymous duplicate scan against people (public currently queues pending)

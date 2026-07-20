@@ -9,6 +9,10 @@ import { AssignedNewcomersPage } from './modules/follow-up/AssignedNewcomersPage
 import { WeeklyReportPage } from './modules/follow-up/WeeklyReportPage';
 import { AttendancePage } from './modules/follow-up/AttendancePage';
 import { NewcomerProfilePage } from './modules/follow-up/NewcomerProfilePage';
+import { PublicRegistrationPage } from './modules/follow-up/PublicRegistrationPage';
+import { LeaderDeskPage } from './modules/follow-up/LeaderDeskPage';
+import { MembershipRecommendPage } from './modules/follow-up/MembershipRecommendPage';
+import { MembershipApprovalsPage } from './modules/follow-up/MembershipApprovalsPage';
 
 function Protected({ children }: { children: ReactNode }) {
   const { loading, user, account, error } = useSession();
@@ -42,6 +46,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/sign-in" element={<SignInPage />} />
+      <Route path="/register" element={<PublicRegistrationPage />} />
       <Route
         path="/app"
         element={
@@ -67,6 +72,22 @@ export default function App() {
         }
       />
       <Route
+        path="/app/follow-up/leader"
+        element={
+          <Protected>
+            <LeaderDeskPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/app/follow-up/membership"
+        element={
+          <Protected>
+            <MembershipApprovalsPage />
+          </Protected>
+        }
+      />
+      <Route
         path="/app/follow-up/newcomers/:assignmentId"
         element={
           <Protected>
@@ -87,6 +108,14 @@ export default function App() {
         element={
           <Protected>
             <AttendancePage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/app/follow-up/newcomers/:assignmentId/membership"
+        element={
+          <Protected>
+            <MembershipRecommendPage />
           </Protected>
         }
       />

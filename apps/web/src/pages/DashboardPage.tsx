@@ -59,9 +59,26 @@ export function DashboardPage() {
       <section className="panel">
         <h2>Follow-Up</h2>
         {can('follow_up.view') || can('platform.admin') || can('org.admin') ? (
-          <p>
-            <Link to="/app/follow-up">My assigned newcomers</Link>
-          </p>
+          <>
+            <p>
+              <Link to="/app/follow-up">My assigned newcomers</Link>
+            </p>
+            {(can('follow_up.assignments.create') ||
+              can('follow_up.duplicate.review') ||
+              can('platform.admin') ||
+              can('org.admin')) && (
+              <p>
+                <Link to="/app/follow-up/leader">Leader desk</Link>
+              </p>
+            )}
+            {(can('follow_up.membership_review.start') ||
+              can('platform.admin') ||
+              can('org.admin')) && (
+              <p>
+                <Link to="/app/follow-up/membership">Membership approvals</Link>
+              </p>
+            )}
+          </>
         ) : (
           <p className="muted">No Follow-Up module access.</p>
         )}

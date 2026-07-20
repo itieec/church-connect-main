@@ -1,0 +1,135 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function accountPath() {
+      return /databases/$(database)/documents/userAccounts/$(request.auth.uid);
+    }
+
+    function account() {
+      return get(accountPath()).data;
+    }
+
+    function hasAccount() {
+      return isSignedIn() && exists(accountPath());
+    }
+
+    function accountActive() {
+      return hasAccount() && account().accountStatus == 'active';
+    }
+
+    function orgId() {
+      return account().organizationId;
+    }
+
+    function personId() {
+      return account().personId;
+    }
+
+    function sameOrg(data) {
+      return data.organizationId == orgId();
+    }
+
+    // Phase A: Super Admin / Head Leader bootstrap via platform permission keys
+    // stored on roleAssignments. Full live RBAC evaluation in rules lands with
+    // Cloud Functions / claims enrichment; clients still resolve permissions.
+    function hasPlatformAdmin() {
+      return accountActive()
+        && (
+          account().keys().hasAny(['isSuperAdmin']) && account().isSuperAdmin == true
+        );
+    }
+
+    function canReadOrg(data) {
+      return accountActive() && sameOrg(data);
+    }
+
+    function canWriteOrgAdmin(data) {
+      return hasPlatformAdmin() && sameOrg(data);
+    }
+
+    match /organizations/{organizationId} {
+      allow read: if accountActive() && organizationId == account().organizationId;
+      allow write: if hasPlatformAdmin();
+    }
+
+    match /people/{personId} {
+      allow read: if canReadOrg(resource.data);
+      allow create, update: if canWriteOrgAdmin(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /userAccounts/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || hasPlatformAdmin());
+      allow create: if hasPlatformAdmin()
+        || (isSignedIn()
+            && request.auth.uid == uid
+            && request.resource.data.accountStatus == 'active'
+            && request.resource.data.personId is string
+            && request.resource.data.organizationId is string);
+      allow update: if hasPlatformAdmin()
+        || (isSignedIn()
+            && request.auth.uid == uid
+            && request.resource.data.personId == resource.data.personId
+            && request.resource.data.organizationId == resource.data.organizationId);
+      allow delete: if false;
+    }
+
+    match /roleTemplates/{roleId} {
+      allow read: if accountActive() && sameOrg(resource.data);
+      allow write: if canWriteOrgAdmin(request.resource.data);
+    }
+
+    match /roleAssignments/{assignmentId} {
+      allow read: if accountActive()
+        && (sameOrg(resource.data) || resource.data.personId == personId());
+      allow write: if canWriteOrgAdmin(request.resource.data);
+    }
+
+    match /permissionOverrides/{overrideId} {
+      allow read: if accountActive()
+        && (sameOrg(resource.data) || resource.data.personId == personId());
+      allow write: if canWriteOrgAdmin(request.resource.data);
+    }
+
+    match /teamMemberships/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow write: if canWriteOrgAdmin(request.resource.data);
+    }
+
+    match /organizationalPositionAssignments/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow write: if canWriteOrgAdmin(request.resource.data);
+    }
+
+    match /oversightAssignments/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow write: if canWriteOrgAdmin(request.resource.data);
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if canReadOrg(resource.data) && hasPlatformAdmin();
+      allow create: if accountActive() && sameOrg(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /ministries/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow write: if canWriteOrgAdmin(request.resource.data);
+    }
+
+    match /teams/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow write: if canWriteOrgAdmin(request.resource.data);
+    }
+
+    // Public registration intake is Phase B (Follow-Up). Locked closed for Phase A.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

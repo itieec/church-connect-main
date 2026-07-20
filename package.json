@@ -1,0 +1,29 @@
+{
+  "name": "ieec-ya-connect",
+  "private": true,
+  "version": "0.1.0",
+  "description": "IEEC YA Connect — React + Firebase platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @ieec/web",
+    "build": "npm run build -w @ieec/shared && npm run build -w @ieec/web",
+    "lint": "npm run lint -w @ieec/web",
+    "typecheck": "npm run typecheck -w @ieec/shared && npm run build -w @ieec/web",
+    "firebase": "firebase",
+    "emulators": "firebase emulators:start --import=./.firebase-data --export-on-exit",
+    "deploy": "npm run build && firebase deploy",
+    "deploy:hosting": "npm run build && firebase deploy --only hosting",
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
+    "seed": "node scripts/seed-bootstrap.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "firebase-admin": "^13.4.0",
+    "firebase-tools": "^15.24.0"
+  }
+}

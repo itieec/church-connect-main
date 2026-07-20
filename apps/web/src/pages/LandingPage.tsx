@@ -14,9 +14,9 @@ export function LandingPage() {
           <Link className="button" to="/sign-in">
             Sign in
           </Link>
-          <a className="button ghost" href="#phase">
-            Platform status
-          </a>
+          <Link className="button ghost" to="/register">
+            Newcomer registration
+          </Link>
         </div>
       </header>
 

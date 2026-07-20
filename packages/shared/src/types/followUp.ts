@@ -187,6 +187,62 @@ export const FOLLOW_UP_CONFIG_DEFAULTS = {
   attendanceProgramLabel: 'Saturday 6:30 PM–9:30 PM',
 } as const;
 
+export interface MembershipRecommendation {
+  id: string;
+  organizationId: string;
+  journeyId: string;
+  personId: string;
+  assignmentId?: string | null;
+  status:
+    | 'draft'
+    | 'submitted'
+    | 'approved'
+    | 'rejected'
+    | 'returned_for_correction'
+    | string;
+  participationSummary?: string;
+  attendanceSummary?: string;
+  followUpSummary?: string;
+  willingness?: string;
+  concerns?: string;
+  comments?: string;
+  nextSteps?: string;
+  submittedByPersonId?: string | null;
+  submittedAt?: unknown | null;
+  decidedByPersonId?: string | null;
+  decidedAt?: unknown | null;
+  decisionComment?: string | null;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface PublicRegistration {
+  id: string;
+  organizationId: string;
+  firstName: string;
+  lastName: string;
+  sex?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  contactPreferenceMethod?: 'call' | 'text' | string;
+  preferredContactTime?: string | null;
+  consent: boolean;
+  registrationSource: string;
+  status:
+    | 'registration_pending'
+    | 'duplicate_review_required'
+    | 'accepted'
+    | 'discarded'
+    | string;
+  candidatePersonIds?: string[];
+  linkedPersonId?: string | null;
+  linkedJourneyId?: string | null;
+  reviewNotes?: string | null;
+  reviewedByPersonId?: string | null;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
 export const WEEKLY_REPORT_FORM_KEY = 'follow_up_weekly_report';
 
 export const DEFAULT_WEEKLY_REPORT_FIELDS: FormFieldDefinition[] = [

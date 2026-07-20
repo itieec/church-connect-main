@@ -209,7 +209,38 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Public registration intake remains locked until a dedicated public path.
+    match /membershipRecommendations/{id} {
+      allow read: if canReadOrg(resource.data);
+      allow create: if isOrgMember()
+        && sameOrg(request.resource.data)
+        && request.resource.data.submittedByPersonId == personId();
+      allow update: if isOrgMember() && sameOrg(resource.data);
+      allow delete: if false;
+    }
+
+    // Public intake: create-only with required consent + org + names.
+    // No reads for anonymous users. Leaders process via authenticated desk.
+    match /publicRegistrations/{id} {
+      allow create: if request.resource.data.keys().hasAll([
+          'organizationId',
+          'firstName',
+          'lastName',
+          'consent',
+          'registrationSource',
+          'status'
+        ])
+        && request.resource.data.consent == true
+        && request.resource.data.firstName is string
+        && request.resource.data.lastName is string
+        && request.resource.data.organizationId is string
+        && request.resource.data.status in [
+          'registration_pending',
+          'duplicate_review_required'
+        ];
+      allow read, update: if isOrgMember() && sameOrg(resource.data);
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

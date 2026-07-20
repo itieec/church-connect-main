@@ -53,31 +53,7 @@ npm run emulators
 npm run dev
 ```
 
-## Production Firebase setup
-
-1. Confirm project id (default in `.firebaserc` is `ieec-ya-connect`).
-2. In Firebase Console, enable **Authentication → Email/Password**.
-3. Create a Firestore database (production mode; rules deploy from this repo).
-4. Register a **Web app** and copy config into `apps/web/.env.local`.
-5. Login CLI:
-
-```bash
-npx firebase login
-# or CI:
-# export FIREBASE_TOKEN=...
-npx firebase use ieec-ya-connect
-```
-
-6. Deploy rules + hosting:
-
-```bash
-npm run deploy:rules
-npm run deploy:hosting
-# or full:
-npm run deploy
-```
-
-Hosting serves `apps/web/dist` with SPA rewrite to `index.html`.
+See [`docs/FIREBASE_CONNECT.md`](docs/FIREBASE_CONNECT.md) for production connect, deploy, and seed. One-shot helper: `npm run firebase:connect` (requires `FIREBASE_TOKEN` + configs).
 
 ## Bootstrap Super Admin
 

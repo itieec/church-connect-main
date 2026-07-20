@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -7,28 +8,38 @@ import {
   serverTimestamp,
   setDoc,
   Timestamp,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 import {
   attendanceDocId,
   canEditReport,
+  findDuplicateCandidates,
   getEditableUntil,
   getReportingWeekBounds,
   getSaturdayProgramDate,
   isReportLate,
+  normalizeEmail,
+  normalizeName,
+  normalizePhone,
   saturdayEventId,
   DEFAULT_WEEKLY_REPORT_FIELDS,
   WEEKLY_REPORT_FORM_KEY,
   type AttendanceStatus,
   type FollowUpAssignment,
   type FollowUpReport,
+  type MembershipRecommendation,
   type NewcomerAttendance,
   type NewcomerBioEntry,
   type NewcomerJourney,
   type Person,
+  type PublicRegistration,
 } from '@ieec/shared';
 import { getDb } from '../../lib/firebase';
 import { writeAudit } from '../../engines/audit/writeAudit';
+
+const DEFAULT_ORG =
+  (import.meta.env.VITE_PUBLIC_ORG_ID as string | undefined) || 'ieec_ya';
 
 function mapDoc<T extends { id: string }>(
   id: string,
@@ -341,4 +352,615 @@ export async function addBioEntry(params: {
     deletedByPersonId: null,
   });
   return ref.id;
+}
+
+export async function listUnassignedJourneys(
+  organizationId: string,
+): Promise<NewcomerJourney[]> {
+  const snap = await getDocs(
+    query(
+      collection(getDb(), 'newcomerJourneys'),
+      where('organizationId', '==', organizationId),
+      where('journeyStatus', 'in', [
+        'awaiting_assignment',
+        'duplicate_review_required',
+      ]),
+    ),
+  );
+  return snap.docs.map((d) =>
+    mapDoc<NewcomerJourney>(d.id, d.data() as Omit<NewcomerJourney, 'id'>),
+  );
+}
+
+export async function listTeamMembersForAssign(
+  organizationId: string,
+): Promise<Person[]> {
+  // MVP: people with hasUserAccount in org (ministers/leaders)
+  const snap = await getDocs(
+    query(
+      collection(getDb(), 'people'),
+      where('organizationId', '==', organizationId),
+      where('hasUserAccount', '==', true),
+      where('recordStatus', '==', 'active'),
+    ),
+  );
+  return snap.docs.map((d) =>
+    mapDoc<Person>(d.id, d.data() as Omit<Person, 'id'>),
+  );
+}
+
+export async function createAssignment(params: {
+  organizationId: string;
+  journey: NewcomerJourney;
+  assignedPersonId: string;
+  actorPersonId: string;
+  assignmentType?: string;
+  replaceExistingPrimary?: boolean;
+}): Promise<{ assignmentId: string; warning?: string }> {
+  const activeSnap = await getDocs(
+    query(
+      collection(getDb(), 'followUpAssignments'),
+      where('journeyId', '==', params.journey.id),
+      where('assignmentStatus', '==', 'active'),
+    ),
+  );
+  let warning: string | undefined;
+  if (!activeSnap.empty) {
+    warning = `Journey already has ${activeSnap.size} active assignment(s).`;
+    if (params.replaceExistingPrimary) {
+      for (const d of activeSnap.docs) {
+        const data = d.data();
+        if (data.assignmentType === 'primary') {
+          await updateDoc(d.ref, {
+            assignmentStatus: 'ended',
+            endDate: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+    }
+  }
+
+  const ref = doc(collection(getDb(), 'followUpAssignments'));
+  await setDoc(ref, {
+    organizationId: params.organizationId,
+    journeyId: params.journey.id,
+    newcomerPersonId: params.journey.personId,
+    assignedPersonId: params.assignedPersonId,
+    assignmentType: params.assignmentType ?? 'primary',
+    assignmentStatus: 'active',
+    reportingRequired: true,
+    startDate: serverTimestamp(),
+    endDate: null,
+    assignedByPersonId: params.actorPersonId,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  await updateDoc(doc(getDb(), 'newcomerJourneys', params.journey.id), {
+    journeyStatus: 'assigned',
+    updatedAt: serverTimestamp(),
+    updatedBy: params.actorPersonId,
+  });
+
+  await writeAudit({
+    organizationId: params.organizationId,
+    action: 'follow_up.assignment.create',
+    actorPersonId: params.actorPersonId,
+    actorAuthUid: null,
+    targetType: 'followUpAssignment',
+    targetId: ref.id,
+    before: null,
+    after: { assignedPersonId: params.assignedPersonId },
+    metadata: { warning: warning ?? null },
+  });
+
+  return { assignmentId: ref.id, warning };
+}
+
+export async function reassignAssignment(params: {
+  organizationId: string;
+  assignment: FollowUpAssignment;
+  newAssigneePersonId: string;
+  actorPersonId: string;
+  reason?: string;
+}): Promise<string> {
+  await updateDoc(doc(getDb(), 'followUpAssignments', params.assignment.id), {
+    assignmentStatus: 'ended',
+    endDate: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  const ref = doc(collection(getDb(), 'followUpAssignments'));
+  await setDoc(ref, {
+    organizationId: params.organizationId,
+    journeyId: params.assignment.journeyId,
+    newcomerPersonId: params.assignment.newcomerPersonId,
+    assignedPersonId: params.newAssigneePersonId,
+    assignmentType: params.assignment.assignmentType,
+    assignmentStatus: 'active',
+    reportingRequired: true,
+    startDate: serverTimestamp(),
+    endDate: null,
+    assignedByPersonId: params.actorPersonId,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  await writeAudit({
+    organizationId: params.organizationId,
+    action: 'follow_up.assignment.reassign',
+    actorPersonId: params.actorPersonId,
+    actorAuthUid: null,
+    targetType: 'followUpAssignment',
+    targetId: ref.id,
+    before: { previousAssignmentId: params.assignment.id },
+    after: { assignedPersonId: params.newAssigneePersonId },
+    metadata: { reason: params.reason ?? null },
+  });
+
+  return ref.id;
+}
+
+export async function submitPublicRegistration(input: {
+  firstName: string;
+  lastName: string;
+  sex?: string;
+  phone?: string;
+  email?: string;
+  contactPreferenceMethod?: string;
+  preferredContactTime?: string;
+  consent: boolean;
+  organizationId?: string;
+}): Promise<{ registrationId: string; status: string }> {
+  if (!input.consent) throw new Error('Consent is required.');
+  const organizationId = input.organizationId || DEFAULT_ORG;
+
+  // Client-side duplicate scan against people the rules allow... public cannot
+  // read people. Store as pending; a Cloud Function / leader review completes
+  // detection. For authenticated leaders creating via admin, we scan.
+  const ref = await addDoc(collection(getDb(), 'publicRegistrations'), {
+    organizationId,
+    firstName: input.firstName.trim(),
+    lastName: input.lastName.trim(),
+    sex: input.sex ?? null,
+    phone: input.phone ?? null,
+    email: input.email ?? null,
+    contactPreferenceMethod: input.contactPreferenceMethod ?? 'text',
+    preferredContactTime: input.preferredContactTime ?? null,
+    consent: true,
+    registrationSource: 'public_web',
+    status: 'registration_pending',
+    candidatePersonIds: [],
+    linkedPersonId: null,
+    linkedJourneyId: null,
+    reviewNotes: null,
+    reviewedByPersonId: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return { registrationId: ref.id, status: 'registration_pending' };
+}
+
+/** Leader intake: create registration then immediately process duplicate check. */
+export async function intakeAndProcessRegistration(params: {
+  organizationId: string;
+  actorPersonId: string;
+  firstName: string;
+  lastName: string;
+  sex?: string;
+  phone?: string;
+  email?: string;
+  contactPreferenceMethod?: string;
+  preferredContactTime?: string;
+}): Promise<{ registrationId: string; status: string; journeyId?: string }> {
+  const peopleSnap = await getDocs(
+    query(
+      collection(getDb(), 'people'),
+      where('organizationId', '==', params.organizationId),
+      where('recordStatus', '==', 'active'),
+    ),
+  );
+  const people = peopleSnap.docs.map((d) => {
+    const data = d.data() as {
+      firstName?: string;
+      lastName?: string;
+      phone?: { normalized?: string };
+      email?: { normalized?: string };
+    };
+    return {
+      id: d.id,
+      firstName: String(data.firstName ?? ''),
+      lastName: String(data.lastName ?? ''),
+      phoneNormalized: data.phone?.normalized ?? null,
+      emailNormalized: data.email?.normalized ?? null,
+    };
+  });
+
+  const candidates = findDuplicateCandidates(
+    {
+      firstName: params.firstName,
+      lastName: params.lastName,
+      phone: params.phone,
+      email: params.email,
+    },
+    people,
+  );
+
+  const regRef = doc(collection(getDb(), 'publicRegistrations'));
+  const status = candidates.length
+    ? 'duplicate_review_required'
+    : 'registration_pending';
+
+  await setDoc(regRef, {
+    organizationId: params.organizationId,
+    firstName: params.firstName.trim(),
+    lastName: params.lastName.trim(),
+    sex: params.sex ?? null,
+    phone: params.phone ?? null,
+    email: params.email ?? null,
+    contactPreferenceMethod: params.contactPreferenceMethod ?? 'text',
+    preferredContactTime: params.preferredContactTime ?? null,
+    consent: true,
+    registrationSource: 'staff_assisted',
+    status,
+    candidatePersonIds: candidates.map((c) => c.id),
+    linkedPersonId: null,
+    linkedJourneyId: null,
+    reviewNotes: null,
+    reviewedByPersonId: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  if (candidates.length) {
+    return { registrationId: regRef.id, status };
+  }
+
+  const created = await acceptRegistrationAsNewPerson({
+    organizationId: params.organizationId,
+    registrationId: regRef.id,
+    actorPersonId: params.actorPersonId,
+  });
+  return {
+    registrationId: regRef.id,
+    status: 'accepted',
+    journeyId: created.journeyId,
+  };
+}
+
+export async function listPendingRegistrations(
+  organizationId: string,
+): Promise<PublicRegistration[]> {
+  const snap = await getDocs(
+    query(
+      collection(getDb(), 'publicRegistrations'),
+      where('organizationId', '==', organizationId),
+      where('status', 'in', [
+        'registration_pending',
+        'duplicate_review_required',
+      ]),
+    ),
+  );
+  return snap.docs.map((d) =>
+    mapDoc<PublicRegistration>(
+      d.id,
+      d.data() as Omit<PublicRegistration, 'id'>,
+    ),
+  );
+}
+
+export async function acceptRegistrationAsNewPerson(params: {
+  organizationId: string;
+  registrationId: string;
+  actorPersonId: string;
+}): Promise<{ personId: string; journeyId: string }> {
+  const regSnap = await getDoc(
+    doc(getDb(), 'publicRegistrations', params.registrationId),
+  );
+  if (!regSnap.exists()) throw new Error('Registration not found');
+  const reg = regSnap.data() as PublicRegistration;
+
+  const personRef = doc(collection(getDb(), 'people'));
+  const journeyRef = doc(collection(getDb(), 'newcomerJourneys'));
+
+  await setDoc(personRef, {
+    organizationId: params.organizationId,
+    firstName: reg.firstName,
+    lastName: reg.lastName,
+    normalizedFirstName: normalizeName(reg.firstName),
+    normalizedLastName: normalizeName(reg.lastName),
+    sex: reg.sex ?? null,
+    phone: reg.phone
+      ? { display: reg.phone, normalized: normalizePhone(reg.phone) }
+      : null,
+    email: reg.email
+      ? {
+          address: reg.email,
+          normalized: normalizeEmail(reg.email),
+          verified: false,
+        }
+      : null,
+    contactPreference: {
+      method: reg.contactPreferenceMethod ?? 'text',
+      preferredTime: reg.preferredContactTime ?? null,
+      customTimeNote: null,
+    },
+    currentMinistryStatus: 'newcomer',
+    recordStatus: 'active',
+    hasUserAccount: false,
+    activeJourneyId: journeyRef.id,
+    createdAt: serverTimestamp(),
+    createdBy: params.actorPersonId,
+    updatedAt: serverTimestamp(),
+    updatedBy: params.actorPersonId,
+  });
+
+  await setDoc(journeyRef, {
+    organizationId: params.organizationId,
+    personId: personRef.id,
+    registrationDate: serverTimestamp(),
+    registrationSource: reg.registrationSource,
+    journeyStatus: 'awaiting_assignment',
+    membershipReadinessStatus: 'not_ready',
+    previousJourneyId: null,
+    isCurrentJourney: true,
+    welcomeMessageStatus: null,
+    startedAt: serverTimestamp(),
+    completedAt: null,
+    closureReason: null,
+    createdAt: serverTimestamp(),
+    createdBy: params.actorPersonId,
+    updatedAt: serverTimestamp(),
+    updatedBy: params.actorPersonId,
+  });
+
+  await updateDoc(doc(getDb(), 'publicRegistrations', params.registrationId), {
+    status: 'accepted',
+    linkedPersonId: personRef.id,
+    linkedJourneyId: journeyRef.id,
+    reviewedByPersonId: params.actorPersonId,
+    updatedAt: serverTimestamp(),
+  });
+
+  await writeAudit({
+    organizationId: params.organizationId,
+    action: 'follow_up.registration.accept_new',
+    actorPersonId: params.actorPersonId,
+    actorAuthUid: null,
+    targetType: 'publicRegistration',
+    targetId: params.registrationId,
+    before: null,
+    after: { personId: personRef.id, journeyId: journeyRef.id },
+    metadata: null,
+  });
+
+  return { personId: personRef.id, journeyId: journeyRef.id };
+}
+
+export async function linkRegistrationToExistingPerson(params: {
+  organizationId: string;
+  registrationId: string;
+  personId: string;
+  actorPersonId: string;
+}): Promise<{ journeyId: string }> {
+  const journeyRef = doc(collection(getDb(), 'newcomerJourneys'));
+  await setDoc(journeyRef, {
+    organizationId: params.organizationId,
+    personId: params.personId,
+    registrationDate: serverTimestamp(),
+    registrationSource: 'duplicate_link',
+    journeyStatus: 'awaiting_assignment',
+    membershipReadinessStatus: 'not_ready',
+    previousJourneyId: null,
+    isCurrentJourney: true,
+    welcomeMessageStatus: null,
+    startedAt: serverTimestamp(),
+    completedAt: null,
+    closureReason: null,
+    createdAt: serverTimestamp(),
+    createdBy: params.actorPersonId,
+    updatedAt: serverTimestamp(),
+    updatedBy: params.actorPersonId,
+  });
+
+  await updateDoc(doc(getDb(), 'people', params.personId), {
+    activeJourneyId: journeyRef.id,
+    updatedAt: serverTimestamp(),
+    updatedBy: params.actorPersonId,
+  });
+
+  await updateDoc(doc(getDb(), 'publicRegistrations', params.registrationId), {
+    status: 'accepted',
+    linkedPersonId: params.personId,
+    linkedJourneyId: journeyRef.id,
+    reviewedByPersonId: params.actorPersonId,
+    updatedAt: serverTimestamp(),
+  });
+
+  await writeAudit({
+    organizationId: params.organizationId,
+    action: 'follow_up.registration.link_existing',
+    actorPersonId: params.actorPersonId,
+    actorAuthUid: null,
+    targetType: 'publicRegistration',
+    targetId: params.registrationId,
+    before: null,
+    after: { personId: params.personId, journeyId: journeyRef.id },
+    metadata: null,
+  });
+
+  return { journeyId: journeyRef.id };
+}
+
+export async function discardRegistration(params: {
+  organizationId: string;
+  registrationId: string;
+  actorPersonId: string;
+  notes?: string;
+}): Promise<void> {
+  await updateDoc(doc(getDb(), 'publicRegistrations', params.registrationId), {
+    status: 'discarded',
+    reviewNotes: params.notes ?? null,
+    reviewedByPersonId: params.actorPersonId,
+    updatedAt: serverTimestamp(),
+  });
+  await writeAudit({
+    organizationId: params.organizationId,
+    action: 'follow_up.registration.discard',
+    actorPersonId: params.actorPersonId,
+    actorAuthUid: null,
+    targetType: 'publicRegistration',
+    targetId: params.registrationId,
+    before: null,
+    after: { status: 'discarded' },
+    metadata: { notes: params.notes ?? null },
+  });
+}
+
+export async function submitMembershipRecommendation(params: {
+  organizationId: string;
+  assignment: FollowUpAssignment;
+  actorPersonId: string;
+  participationSummary: string;
+  attendanceSummary: string;
+  followUpSummary: string;
+  willingness: string;
+  concerns?: string;
+  comments?: string;
+  nextSteps?: string;
+}): Promise<string> {
+  const ref = doc(collection(getDb(), 'membershipRecommendations'));
+  await setDoc(ref, {
+    organizationId: params.organizationId,
+    journeyId: params.assignment.journeyId,
+    personId: params.assignment.newcomerPersonId,
+    assignmentId: params.assignment.id,
+    status: 'submitted',
+    participationSummary: params.participationSummary,
+    attendanceSummary: params.attendanceSummary,
+    followUpSummary: params.followUpSummary,
+    willingness: params.willingness,
+    concerns: params.concerns ?? null,
+    comments: params.comments ?? null,
+    nextSteps: params.nextSteps ?? null,
+    submittedByPersonId: params.actorPersonId,
+    submittedAt: serverTimestamp(),
+    decidedByPersonId: null,
+    decidedAt: null,
+    decisionComment: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  await updateDoc(doc(getDb(), 'newcomerJourneys', params.assignment.journeyId), {
+    journeyStatus: 'membership_approval_in_progress',
+    membershipReadinessStatus: 'ready',
+    updatedAt: serverTimestamp(),
+    updatedBy: params.actorPersonId,
+  });
+
+  await writeAudit({
+    organizationId: params.organizationId,
+    action: 'follow_up.membership.recommend',
+    actorPersonId: params.actorPersonId,
+    actorAuthUid: null,
+    targetType: 'membershipRecommendation',
+    targetId: ref.id,
+    before: null,
+    after: { status: 'submitted' },
+    metadata: null,
+  });
+
+  return ref.id;
+}
+
+export async function listMembershipRecommendations(
+  organizationId: string,
+): Promise<MembershipRecommendation[]> {
+  const snap = await getDocs(
+    query(
+      collection(getDb(), 'membershipRecommendations'),
+      where('organizationId', '==', organizationId),
+      where('status', '==', 'submitted'),
+    ),
+  );
+  return snap.docs.map((d) =>
+    mapDoc<MembershipRecommendation>(
+      d.id,
+      d.data() as Omit<MembershipRecommendation, 'id'>,
+    ),
+  );
+}
+
+export async function decideMembershipRecommendation(params: {
+  organizationId: string;
+  recommendation: MembershipRecommendation;
+  actorPersonId: string;
+  decision: 'approved' | 'rejected' | 'returned_for_correction';
+  comment?: string;
+}): Promise<void> {
+  await updateDoc(
+    doc(getDb(), 'membershipRecommendations', params.recommendation.id),
+    {
+      status: params.decision,
+      decidedByPersonId: params.actorPersonId,
+      decidedAt: serverTimestamp(),
+      decisionComment: params.comment ?? null,
+      updatedAt: serverTimestamp(),
+    },
+  );
+
+  if (params.decision === 'approved') {
+    await updateDoc(doc(getDb(), 'people', params.recommendation.personId), {
+      currentMinistryStatus: 'member',
+      updatedAt: serverTimestamp(),
+      updatedBy: params.actorPersonId,
+    });
+    await updateDoc(
+      doc(getDb(), 'newcomerJourneys', params.recommendation.journeyId),
+      {
+        journeyStatus: 'transitioned_to_member',
+        completedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        updatedBy: params.actorPersonId,
+      },
+    );
+    const assignments = await getDocs(
+      query(
+        collection(getDb(), 'followUpAssignments'),
+        where('journeyId', '==', params.recommendation.journeyId),
+        where('assignmentStatus', '==', 'active'),
+      ),
+    );
+    for (const d of assignments.docs) {
+      await updateDoc(d.ref, {
+        assignmentStatus: 'ended',
+        endDate: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } else if (params.decision === 'rejected') {
+    await updateDoc(
+      doc(getDb(), 'newcomerJourneys', params.recommendation.journeyId),
+      {
+        journeyStatus: 'active_follow_up',
+        updatedAt: serverTimestamp(),
+        updatedBy: params.actorPersonId,
+      },
+    );
+  }
+
+  await writeAudit({
+    organizationId: params.organizationId,
+    action: `follow_up.membership.${params.decision}`,
+    actorPersonId: params.actorPersonId,
+    actorAuthUid: null,
+    targetType: 'membershipRecommendation',
+    targetId: params.recommendation.id,
+    before: { status: params.recommendation.status },
+    after: { status: params.decision },
+    metadata: { comment: params.comment ?? null },
+  });
 }

@@ -57,6 +57,17 @@ export function DashboardPage() {
       </section>
 
       <section className="panel">
+        <h2>Follow-Up</h2>
+        {can('follow_up.view') || can('platform.admin') || can('org.admin') ? (
+          <p>
+            <Link to="/app/follow-up">My assigned newcomers</Link>
+          </p>
+        ) : (
+          <p className="muted">No Follow-Up module access.</p>
+        )}
+      </section>
+
+      <section className="panel">
         <h2>Admin</h2>
         {can('rbac.templates.manage') || can('platform.admin') || can('org.admin') ? (
           <p>
@@ -65,10 +76,6 @@ export function DashboardPage() {
         ) : (
           <p className="muted">You do not have RBAC admin permissions.</p>
         )}
-        <p className="muted">
-          Follow-Up module (Phase B) is next: public registration, journeys,
-          weekly reports, Saturday attendance.
-        </p>
       </section>
     </div>
   );

@@ -1,36 +1,41 @@
 # Implementation status
 
-**Branch:** Phase A Firebase foundation  
-**Date:** 2026-07-19
+**Branch:** Phase B Follow-Up + Phase C Expo mobile (parallel)  
+**Date:** 2026-07-20
 
-## Zip audit
+## Decisions locked
 
-`IEEC-cursor-react-firebase-platform-eb4d.zip` contents:
+- Mobile Firebase SDK: **React Native Firebase**
+- Delivery: Phase B (Follow-Up) and Phase C (mobile) **in parallel**
+- Navigation: Expo Router
 
-- Planning docs only (`docs/handbook`, `docs/adr`, `docs/modules`, handoff prompt)
-- **No** React app, Expo app, `package.json`, Firebase rules, or Cloud Functions
-- Planning freeze note: Architecture Baseline v1.0 ready for coding
+## Delivered
 
-Those docs are ingested into this repository under `docs/`.
+### Shared / backend
+- Follow-Up types + reporting helpers in `@ieec/shared`
+- Firestore rules/indexes for Follow-Up collections
+- Seed creates demo newcomer + active assignment for bootstrap user
 
-## Phase A delivered in code
+### Web (Phase B minister slice)
+- `/app/follow-up` assigned list
+- Profile / weekly report / Saturday attendance (separate records)
 
-- Monorepo: `apps/web`, `packages/shared`, `firebase/`
-- Firebase Hosting + Firestore rules/indexes (`firebase.json`, `.firebaserc` → `ieec-ya-connect`)
-- Auth email/password session: Auth UID → `userAccounts` → Person → effective permissions
-- Shared RBAC resolver (template grant + overrides; deny wins; time bounds)
-- Admin RBAC read UI (templates + assignments)
-- Bootstrap seed script for Super Admin / org / Follow-Up role templates
-- Production web build (`npm run build`)
+### Mobile (Phase C)
+- `apps/mobile` Expo app with RN Firebase Auth + Firestore
+- Sign-in + permission session
+- Assigned newcomers, report, attendance, profile, bio
+- Local notification helpers (first-contact 48h, weekly reminder)
+- EAS profiles + README
 
-## Blocked on human / credentials
+## Still required from human
 
-1. Confirm Firebase project id is `ieec-ya-connect` (or update `.firebaserc`)
-2. `firebase login` (or `FIREBASE_TOKEN`) in this environment
-3. Web app config keys in `apps/web/.env.local`
-4. Service account JSON to run `npm run seed`
-5. Explicit approval before overwriting any existing production data
+1. Firebase login/token + confirm project `ieec-ya-connect`
+2. Real `google-services.json` / `GoogleService-Info.plist`
+3. `npm run seed` with service account
+4. EAS project id + Apple/Google signing for store builds
 
-## Next (Phase B)
+## Not in this slice
 
-Follow-Up module per `docs/modules/*` — public registration, journeys, assignments, weekly reports, Saturday attendance.
+- Public registration UI
+- Membership approval workflow UI (web-primary later)
+- Full FCM server push pipeline (local reminders wired)

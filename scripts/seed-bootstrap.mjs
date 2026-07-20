@@ -256,6 +256,122 @@ async function main() {
     { merge: true },
   );
 
+  // Also assign Follow-Up Minister template in team scope for parity testing
+  batch.set(
+    db.collection('roleAssignments').doc(`${organizationId}_bootstrap_fu_minister`),
+    {
+      organizationId,
+      personId,
+      roleTemplateId: `${organizationId}_follow_up_minister`,
+      scope: {
+        type: 'team',
+        organizationId,
+        ministryId,
+        teamId,
+        groupId: null,
+      },
+      active: true,
+      startDate: null,
+      endDate: null,
+      assignedByPersonId: personId,
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+
+  // Demo Follow-Up newcomer + journey + assignment (Phase B/C)
+  const newcomerPersonId = `person_${organizationId}_demo_newcomer`;
+  const journeyId = `journey_${organizationId}_demo_1`;
+  const followUpAssignmentId = `assign_${organizationId}_demo_1`;
+
+  batch.set(
+    db.collection('people').doc(newcomerPersonId),
+    {
+      organizationId,
+      firstName: 'Alex',
+      lastName: 'Newcomer',
+      normalizedFirstName: 'alex',
+      normalizedLastName: 'newcomer',
+      phone: { display: '(202) 555-0100', normalized: '2025550100' },
+      email: {
+        address: 'alex.newcomer@example.com',
+        normalized: 'alex.newcomer@example.com',
+        verified: false,
+      },
+      currentMinistryStatus: 'newcomer',
+      recordStatus: 'active',
+      hasUserAccount: false,
+      activeJourneyId: journeyId,
+      createdAt: now,
+      createdBy: 'seed-bootstrap',
+      updatedAt: now,
+      updatedBy: 'seed-bootstrap',
+    },
+    { merge: true },
+  );
+
+  batch.set(
+    db.collection('newcomerJourneys').doc(journeyId),
+    {
+      organizationId,
+      personId: newcomerPersonId,
+      registrationDate: now,
+      registrationSource: 'seed',
+      journeyStatus: 'assigned',
+      membershipReadinessStatus: 'not_ready',
+      previousJourneyId: null,
+      isCurrentJourney: true,
+      welcomeMessageStatus: 'sent',
+      startedAt: now,
+      completedAt: null,
+      closureReason: null,
+      createdAt: now,
+      createdBy: 'seed-bootstrap',
+      updatedAt: now,
+      updatedBy: 'seed-bootstrap',
+    },
+    { merge: true },
+  );
+
+  batch.set(
+    db.collection('followUpAssignments').doc(followUpAssignmentId),
+    {
+      organizationId,
+      journeyId,
+      newcomerPersonId,
+      assignedPersonId: personId,
+      assignmentType: 'primary',
+      assignmentStatus: 'active',
+      reportingRequired: true,
+      startDate: now,
+      endDate: null,
+      assignedByPersonId: personId,
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+
+  batch.set(
+    db.collection('formDefinitions').doc(`${organizationId}_follow_up_weekly_report`),
+    {
+      organizationId,
+      key: 'follow_up_weekly_report',
+      title: 'Follow-Up Weekly Report',
+      version: 1,
+      fields: [
+        { key: 'contact_summary', label: 'Contact summary', type: 'textarea', required: true },
+        { key: 'prayer_requests', label: 'Prayer requests', type: 'textarea', required: false },
+        { key: 'concerns', label: 'Concerns / next actions', type: 'textarea', required: false },
+      ],
+      recordStatus: 'active',
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+
   batch.set(db.collection('auditLogs').doc(), {
     organizationId,
     action: 'bootstrap.seed',
@@ -264,7 +380,7 @@ async function main() {
     targetType: 'userAccount',
     targetId: uid,
     before: null,
-    after: { email, isSuperAdmin: true },
+    after: { email, isSuperAdmin: true, demoAssignment: followUpAssignmentId },
     metadata: { script: 'seed-bootstrap.mjs' },
     createdAt: now,
   });
@@ -272,7 +388,14 @@ async function main() {
   await batch.commit();
 
   console.log('Bootstrap complete');
-  console.log({ projectId, organizationId, email, uid, personId });
+  console.log({
+    projectId,
+    organizationId,
+    email,
+    uid,
+    personId,
+    demo: { newcomerPersonId, journeyId, followUpAssignmentId },
+  });
 }
 
 main().catch((err) => {

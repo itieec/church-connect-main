@@ -10,6 +10,9 @@
   "scripts": {
     "dev": "npm run dev -w @ieec/web",
     "build": "npm run build -w @ieec/shared && npm run build -w @ieec/web",
+    "dev:web": "npm run dev -w @ieec/web",
+    "dev:mobile": "npm run start -w @ieec/mobile",
+    "typecheck:mobile": "npm run typecheck -w @ieec/mobile",
     "lint": "npm run lint -w @ieec/web",
     "typecheck": "npm run typecheck -w @ieec/shared && npm run build -w @ieec/web",
     "firebase": "firebase",
